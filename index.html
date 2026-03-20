@@ -10,208 +10,247 @@
 
 <style>
 body { margin:0; font-family:Arial; background:#111; color:white; }
-header { background:#1f1f1f; padding:15px; text-align:center; font-size:20px; }
-#map { height:300px; }
-main { padding:15px; }
 
-input, button {
-    width:100%;
-    padding:10px;
-    margin-bottom:10px;
-    border-radius:8px;
-    border:none;
-}
-
-button {
-    background:#4CAF50;
-    color:white;
-}
-
-.thumb {
-    width:80px;
-    height:80px;
-    object-fit:cover;
-    margin:3px;
-    cursor:pointer;
-    border-radius:6px;
-}
+#map { height:50vh; }
 
 .card {
     background:#1e1e1e;
     padding:10px;
+    margin:10px;
     border-radius:10px;
-    margin-bottom:10px;
+    cursor:pointer;
+}
+
+/* 🔥 GRID MINIATUR */
+.thumb-grid {
+    display:flex;
+    gap:5px;
+    margin-top:5px;
+}
+
+.thumb {
+    width:60px;
+    height:60px;
+    object-fit:cover;
+    border-radius:6px;
+}
+
+/* DETAIL */
+#detailPanel {
+    position:fixed;
+    bottom:-100%;
+    width:100%;
+    height:65%;
+    background:#1a1a1a;
+    padding:15px;
+    overflow:auto;
+    transition:0.3s;
+}
+
+#detailPanel.active { bottom:0; }
+
+.detail-img {
+    width:100%;
+    margin-top:5px;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+.comment {
+    background:#2a2a2a;
+    padding:5px;
+    margin-top:5px;
+    border-radius:5px;
+}
+
+input, button {
+    width:100%;
+    padding:10px;
+    margin-top:5px;
+    border:none;
+    border-radius:6px;
 }
 </style>
 </head>
 <body>
 
-<header>RC Spots 🌍</header>
-
 <div id="map"></div>
-
-<main>
-
-<h3>🌍 Veřejné spoty</h3>
-
-<input id="name" placeholder="Název spotu">
-<input id="type" placeholder="Typ (crawler / buggy)">
-<input type="file" id="photos" multiple>
-
-<button onclick="savePoint()">Uložit spot</button>
-
 <div id="list"></div>
 
-</main>
+<!-- DETAIL -->
+<div id="detailPanel">
+<h3 id="d_name"></h3>
+<div id="d_type"></div>
 
-<input type="file" id="hiddenFileInput" multiple style="display:none">
+<div id="gallery"></div>
+
+<div id="comments"></div>
+
+<input id="commentInput" placeholder="Komentář">
+<button onclick="addComment()">Přidat komentář</button>
+
+<button onclick="navigate()">Navigovat</button>
+<button onclick="closeDetail()">Zavřít</button>
+</div>
 
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMDxeThwcGUICTptG3Cmll31D7h63Sh4U",
   authDomain: "rc-spots-ef03d.firebaseapp.com",
-  projectId: "rc-spots-ef03d",
-  storageBucket: "rc-spots-ef03d.firebasestorage.app",
-  messagingSenderId: "926140978370",
-  appId: "1:926140978370:web:20b43a7e44646f2b5b575b"
+  projectId: "rc-spots-ef03d"
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// MAPA
-let map = L.map('map').setView([49.8, 15.5], 7);
+let map = L.map('map').setView([49.8,15.5],7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let lastClick = null;
-let tempMarker;
-let markers = [];
+let userPos = null;
+let selectedSpot = null;
 
-map.on('click', e => {
-    lastClick = e.latlng;
-
-    if (tempMarker) map.removeLayer(tempMarker);
-
-    tempMarker = L.marker(e.latlng).addTo(map);
-});
-
-// RESIZE FOTO
-function resizeImage(file, callback) {
-    let img = new Image();
-    let reader = new FileReader();
-
-    reader.onload = e => img.src = e.target.result;
-
-    img.onload = () => {
-        let canvas = document.createElement("canvas");
-        let ctx = canvas.getContext("2d");
-
-        let max = 800;
-        let w = img.width, h = img.height;
-
-        if (w > h && w > max) { h *= max/w; w = max; }
-        else if (h > max) { w *= max/h; h = max; }
-
-        canvas.width = w;
-        canvas.height = h;
-
-        ctx.drawImage(img,0,0,w,h);
-
-        callback(canvas.toDataURL("image/jpeg",0.7));
+// GPS
+navigator.geolocation.getCurrentPosition(pos=>{
+    userPos = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
     };
 
-    reader.readAsDataURL(file);
+    map.setView([userPos.lat,userPos.lng],13);
+
+    L.circleMarker([userPos.lat,userPos.lng],{
+        radius:8,
+        color:"red"
+    }).addTo(map);
+});
+
+// vzdálenost
+function getDistance(a,b){
+    let R = 6371;
+    let dLat = (b.lat-a.lat)*Math.PI/180;
+    let dLng = (b.lng-a.lng)*Math.PI/180;
+
+    let x = Math.sin(dLat/2)**2 +
+        Math.cos(a.lat*Math.PI/180)*
+        Math.cos(b.lat*Math.PI/180)*
+        Math.sin(dLng/2)**2;
+
+    return R * 2 * Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
-// ULOŽENÍ SPOTU
-window.savePoint = function() {
+// DETAIL
+window.openDetail = function(spot,id){
 
-    if (!lastClick) {
-        alert("Klikni do mapy");
-        return;
-    }
+    selectedSpot = { ...spot, id };
 
-    let name = document.getElementById("name").value;
-    let type = document.getElementById("type").value;
-    let files = document.getElementById("photos").files;
+    d_name.innerText = spot.name;
+    d_type.innerText = spot.type;
 
-    if (!name) {
-        alert("Zadej název");
-        return;
-    }
+    gallery.innerHTML="";
+    (spot.images||[]).forEach(img=>{
+        gallery.innerHTML += `<img class="detail-img" src="${img}" onclick="openImage('${img}')">`;
+    });
 
-    let images = [];
-    let loaded = 0;
+    comments.innerHTML="";
+    (spot.comments||[]).forEach(c=>{
+        comments.innerHTML += `<div class="comment">${c.text}</div>`;
+    });
 
-    if (!files.length) {
-        createSpot(images);
-        return;
-    }
-
-    for (let f of files) {
-        resizeImage(f, img => {
-            images.push(img);
-            loaded++;
-
-            if (loaded === files.length) {
-                createSpot(images);
-            }
-        });
-    }
-
-    async function createSpot(images) {
-        await addDoc(collection(db, "spots"), {
-            name,
-            type,
-            lat: lastClick.lat,
-            lng: lastClick.lng,
-            images
-        });
-
-        document.getElementById("name").value="";
-        document.getElementById("type").value="";
-        document.getElementById("photos").value="";
-    }
+    detailPanel.classList.add("active");
 };
 
-// NAČÍTÁNÍ (REALTIME)
-onSnapshot(collection(db, "spots"), snapshot => {
+window.closeDetail = function(){
+    detailPanel.classList.remove("active");
+};
 
-    // smaž staré markery
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
+// otevřít fotku
+window.openImage = function(src){
+    let w = window.open("");
+    w.document.write(`<img src="${src}" style="width:100%">`);
+};
 
-    let list = document.getElementById("list");
-    list.innerHTML = "";
+// komentář
+window.addComment = async function(){
 
-    snapshot.forEach(doc => {
+    let text = commentInput.value;
+    if (!text) return;
+
+    let ref = doc(db,"spots",selectedSpot.id);
+
+    let newComments = (selectedSpot.comments||[]).concat({
+        text:text
+    });
+
+    await updateDoc(ref,{ comments:newComments });
+
+    commentInput.value="";
+};
+
+// navigace
+window.navigate = function(){
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedSpot.lat},${selectedSpot.lng}`);
+};
+
+// realtime
+onSnapshot(collection(db,"spots"), snapshot=>{
+
+    list.innerHTML="";
+    map.eachLayer(l=>{
+        if (l instanceof L.Marker) map.removeLayer(l);
+    });
+
+    let spots=[];
+
+    snapshot.forEach(doc=>{
         let s = doc.data();
+        s.id = doc.id;
+
+        if (userPos){
+            s.distance = getDistance(userPos,s);
+        } else {
+            s.distance = 999;
+        }
+
+        spots.push(s);
+    });
+
+    spots.sort((a,b)=>a.distance-b.distance);
+
+    spots.forEach(s=>{
 
         // marker
-        let marker = L.marker([s.lat, s.lng]).addTo(map);
-        marker.bindTooltip(s.name + " (" + s.type + ")");
-        markers.push(marker);
+        L.marker([s.lat,s.lng])
+            .addTo(map)
+            .on("click",()=>openDetail(s,s.id));
 
-        // seznam
-        let div = document.createElement("div");
-        div.className = "card";
+        // 🔥 miniatury (max 3)
+        let thumbs = "";
+        if (s.images) {
+            thumbs = `<div class="thumb-grid">` +
+                s.images.slice(0,3).map(img =>
+                    `<img class="thumb" src="${img}">`
+                ).join("") +
+                `</div>`;
+        }
 
-        let imagesHTML = "";
-        (s.images || []).forEach(img => {
-            imagesHTML += `<img class="thumb" src="${img}" onclick="window.open('${img}')">`;
-        });
+        let div=document.createElement("div");
+        div.className="card";
 
-        div.innerHTML = `
+        div.innerHTML=`
             <b>${s.name}</b><br>
             ${s.type}<br>
-            ${imagesHTML}
+            📏 ${s.distance.toFixed(1)} km
+            ${thumbs}
         `;
 
+        div.onclick=()=>openDetail(s,s.id);
+
         list.appendChild(div);
+
     });
 
 });
