@@ -122,8 +122,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let userPos = null;
 
-// GPS
-navigator.geolocation.watchPosition(pos=>{
+// 🔥 FUNKCE PRO AKTUALIZACI
+function updateUserPosition(pos){
 
   userPos = {
     lat: pos.coords.latitude,
@@ -144,14 +144,21 @@ navigator.geolocation.watchPosition(pos=>{
   list.innerHTML = "";
   spots = [];
   loadSpots();
+}
 
-}, err=>{
+// 🔥 1. RYCHLÉ NAČTENÍ
+navigator.geolocation.getCurrentPosition(updateUserPosition, err=>{
   console.log("GPS chyba:", err);
-}, {
+});
+
+// 🔥 2. PRŮBĚŽNÁ AKTUALIZACE
+navigator.geolocation.watchPosition(updateUserPosition, err=>{
+  console.log("GPS chyba:", err);
+},{
   enableHighAccuracy:true
 });
 
-// vzdálenost
+// 📏 vzdálenost
 function getDistance(a,b){
   let R=6371;
   let dLat=(b.lat-a.lat)*Math.PI/180;
@@ -251,7 +258,7 @@ async function loadSpots(){
   });
 }
 
-// 🔥 DETAIL (přidáno hodnocení)
+// DETAIL (beze změny)
 window.openDetail = function(id){
 
   document.getElementById("map").classList.add("hidden");
@@ -308,7 +315,6 @@ window.openDetail = function(id){
   modal.style.display="block";
 };
 
-// 🔥 HODNOCENÍ
 window.rate = async function(id,type,val){
 
   let s=spots.find(x=>x.id===id);
@@ -328,13 +334,11 @@ window.rate = async function(id,type,val){
   openDetail(id);
 };
 
-// ZAVŘÍT
 window.closeModal = function(){
   modal.style.display="none";
   document.getElementById("map").classList.remove("hidden");
 };
 
-// KOMENTÁŘ
 window.addComment = async function(id){
 
   let s=spots.find(x=>x.id===id);
