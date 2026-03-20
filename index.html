@@ -10,67 +10,76 @@
 <style>
 body { margin:0; font-family:Arial; background:#0f0f0f; color:white; }
 h1 { text-align:center; }
-#map { height:300px; }
+
+#map {
+  height:300px;
+  transition:0.3s;
+}
+#map.hidden { height:0; }
 
 button {
-    width:100%;
-    padding:12px;
-    margin-top:10px;
-    border:none;
-    border-radius:10px;
-    background:green;
-    color:white;
+  width:100%;
+  padding:12px;
+  margin-top:10px;
+  border:none;
+  border-radius:10px;
+  background:green;
+  color:white;
 }
 
 .card {
-    background:#1a1a1a;
-    margin:10px;
-    padding:15px;
-    border-radius:15px;
+  background:#1a1a1a;
+  margin:10px;
+  padding:15px;
+  border-radius:15px;
 }
 
 .thumb {
-    width:70px;
-    height:70px;
-    object-fit:cover;
-    border-radius:10px;
-    margin-right:5px;
+  width:70px;
+  height:70px;
+  object-fit:cover;
+  border-radius:10px;
+  margin-right:5px;
 }
 
 .gallery {
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:5px;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:5px;
 }
 
 .gallery img {
-    width:100%;
-    border-radius:10px;
+  width:100%;
+  border-radius:10px;
 }
 
 .modal {
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:rgba(0,0,0,0.9);
-    display:none;
-    overflow:auto;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:#0f0f0f;
+  display:none;
+  overflow:auto;
+  z-index:9999;
 }
 
 .modal-content {
-    background:#1a1a1a;
-    margin:20px;
-    padding:20px;
-    border-radius:15px;
+  padding:20px;
 }
 
 .comment {
-    background:#222;
-    padding:8px;
-    margin-top:5px;
-    border-radius:8px;
+  background:#222;
+  padding:8px;
+  margin-top:5px;
+  border-radius:8px;
+}
+
+input {
+  width:100%;
+  padding:10px;
+  margin-top:5px;
 }
 </style>
 </head>
@@ -78,6 +87,7 @@ button {
 <body>
 
 <h1>RC Spots 🌍</h1>
+
 <div id="map"></div>
 
 <button onclick="toggleForm()">+ Přidat spot</button>
@@ -101,13 +111,12 @@ button {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const firebaseConfig = {
+const app = initializeApp({
   apiKey: "TVŮJ_API_KEY",
   authDomain: "TVŮJ_AUTH_DOMAIN",
-  projectId: "rc-spots-ef03d",
-};
+  projectId: "rc-spots-ef03d"
+});
 
-const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 // MAPA
@@ -117,176 +126,181 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 let newLat, newLng;
 
 map.on("click", e=>{
-    newLat = e.latlng.lat;
-    newLng = e.latlng.lng;
-    alert("Klikni uložit spot");
+  newLat = e.latlng.lat;
+  newLng = e.latlng.lng;
+  alert("Klikni uložit spot");
 });
 
+// FORM
 window.toggleForm = function(){
-    let f = document.getElementById("form");
-    f.style.display = f.style.display==="none"?"block":"none";
+  form.style.display = form.style.display==="none"?"block":"none";
 }
 
 // ULOŽENÍ
 window.saveSpot = async function(){
 
-    let files = document.getElementById("images").files;
-    let images = [];
+  let images=[];
 
-    for(let file of files){
-        let reader = new FileReader();
-        await new Promise(res=>{
-            reader.onload = ()=>{
-                images.push(reader.result);
-                res();
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    await addDoc(collection(db,"spots"),{
-        name:name.value,
-        type:type.value,
-        difficulty:difficulty.value,
-        length:length.value,
-        lat:newLat,
-        lng:newLng,
-        images:images,
-        comments:[],
-        ratingDifficulty:[],
-        ratingFun:[]
+  for(let file of images.files){
+    let reader=new FileReader();
+    await new Promise(res=>{
+      reader.onload=()=>{images.push(reader.result);res();}
+      reader.readAsDataURL(file);
     });
+  }
 
-    location.reload();
+  await addDoc(collection(db,"spots"),{
+    name:name.value,
+    type:type.value,
+    difficulty:difficulty.value,
+    length:length.value,
+    lat:newLat,
+    lng:newLng,
+    images,
+    comments:[],
+    ratingDifficulty:[],
+    ratingFun:[]
+  });
+
+  location.reload();
 }
 
-// NAČTENÍ
-let spots = [];
+// DATA
+let spots=[];
 
 async function loadSpots(){
 
-    let snapshot = await getDocs(collection(db,"spots"));
-    let list = document.getElementById("list");
+  let snap = await getDocs(collection(db,"spots"));
 
-    snapshot.forEach(d=>{
+  snap.forEach(d=>{
+    let s=d.data();
+    s.id=d.id;
+    spots.push(s);
 
-        let s = d.data();
-        s.id = d.id;
-        spots.push(s);
+    let div=document.createElement("div");
+    div.className="card";
 
-        let thumbs = "";
-        (s.images||[]).slice(0,3).forEach(img=>{
-            thumbs += `<img class="thumb" src="${img}">`;
-        });
-
-        let div = document.createElement("div");
-        div.className="card";
-
-        div.innerHTML = `
-            <b>${s.name}</b><br>
-            ${s.type} • ${s.difficulty}<br>
-            ${thumbs}
-            <button onclick="openDetail('${s.id}')">Detail</button>
-        `;
-
-        list.appendChild(div);
-
-        L.marker([s.lat,s.lng]).addTo(map);
-    });
-}
-
-// DETAIL
-window.openDetail = function(id){
-
-    let s = spots.find(x=>x.id===id);
-
-    let gallery = "";
-    (s.images||[]).forEach(img=>{
-        gallery += `<img src="${img}" onclick="window.open('${img}')">`;
+    let thumbs="";
+    (s.images||[]).slice(0,3).forEach(i=>{
+      thumbs+=`<img class="thumb" src="${i}">`;
     });
 
-    let commentsHTML = "";
-    (s.comments||[]).forEach(c=>{
-        commentsHTML += `<div class="comment">${c}</div>`;
-    });
-
-    let modal = document.getElementById("modal");
-
-    modal.innerHTML = `
-        <div class="modal-content">
-            <h2>${s.name}</h2>
-
-            <p>${s.type} • ${s.difficulty}</p>
-            <p>Délka: ${s.length} m</p>
-
-            <h3>📸 Fotky</h3>
-            <div class="gallery">${gallery}</div>
-
-            <h3>💬 Komentáře</h3>
-            ${commentsHTML}
-
-            <input id="commentInput" placeholder="Komentář">
-            <button onclick="addComment('${id}')">Přidat</button>
-
-            <h3>⭐ Obtížnost</h3>
-            <button onclick="rate('${id}','difficulty',5)">5</button>
-            <button onclick="rate('${id}','difficulty',3)">3</button>
-            <button onclick="rate('${id}','difficulty',1)">1</button>
-
-            <h3>🔥 Zábavnost</h3>
-            <button onclick="rate('${id}','fun',5)">5</button>
-            <button onclick="rate('${id}','fun',3)">3</button>
-            <button onclick="rate('${id}','fun',1)">1</button>
-
-            <button onclick="closeModal()">Zavřít</button>
-        </div>
+    div.innerHTML=`
+      <b>${s.name}</b><br>
+      ${s.type}<br>
+      ${thumbs}
+      <button onclick="openDetail('${s.id}')">Detail</button>
     `;
 
-    modal.style.display="block";
+    list.appendChild(div);
+
+    L.marker([s.lat,s.lng]).addTo(map);
+  });
 }
 
-// KOMENTÁŘ
-window.addComment = async function(id){
+// 🔥 DETAIL
+window.openDetail = function(id){
 
-    let text = document.getElementById("commentInput").value;
-    let s = spots.find(x=>x.id===id);
+  document.getElementById("map").classList.add("hidden");
 
-    s.comments.push(text);
+  let s=spots.find(x=>x.id===id);
 
-    await updateDoc(doc(db,"spots",id),{
-        comments:s.comments
-    });
+  let gallery="";
+  (s.images||[]).forEach(img=>{
+    gallery+=`<img src="${img}" onclick="window.open('${img}')">`;
+  });
 
-    openDetail(id);
-}
+  let comments="";
+  (s.comments||[]).forEach(c=>{
+    comments+=`<div class="comment">${c}</div>`;
+  });
+
+  let avgDiff = s.ratingDifficulty?.length
+    ? (s.ratingDifficulty.reduce((a,b)=>a+b,0)/s.ratingDifficulty.length).toFixed(1)
+    : "-";
+
+  let avgFun = s.ratingFun?.length
+    ? (s.ratingFun.reduce((a,b)=>a+b,0)/s.ratingFun.length).toFixed(1)
+    : "-";
+
+  modal.innerHTML=`
+  <div class="modal-content">
+
+  <h2>${s.name}</h2>
+  <p>${s.type} • ${s.difficulty}</p>
+  <p>${s.length} m</p>
+
+  <h3>⭐ Obtížnost: ${avgDiff}</h3>
+  <button onclick="rate('${id}','difficulty',5)">5</button>
+  <button onclick="rate('${id}','difficulty',3)">3</button>
+  <button onclick="rate('${id}','difficulty',1)">1</button>
+
+  <h3>🔥 Zábavnost: ${avgFun}</h3>
+  <button onclick="rate('${id}','fun',5)">5</button>
+  <button onclick="rate('${id}','fun',3)">3</button>
+  <button onclick="rate('${id}','fun',1)">1</button>
+
+  <h3>📸 Fotky</h3>
+  <div class="gallery">${gallery}</div>
+
+  <h3>💬 Komentáře</h3>
+  ${comments}
+  <input id="cinput">
+  <button onclick="addComment('${id}')">Přidat</button>
+
+  <button onclick="closeModal()">Zavřít</button>
+
+  </div>
+  `;
+
+  modal.style.display="block";
+};
 
 // HODNOCENÍ
 window.rate = async function(id,type,val){
 
-    let s = spots.find(x=>x.id===id);
+  let s=spots.find(x=>x.id===id);
 
-    if(type==="difficulty"){
-        s.ratingDifficulty.push(val);
-        await updateDoc(doc(db,"spots",id),{
-            ratingDifficulty:s.ratingDifficulty
-        });
-    }else{
-        s.ratingFun.push(val);
-        await updateDoc(doc(db,"spots",id),{
-            ratingFun:s.ratingFun
-        });
-    }
+  if(type==="difficulty"){
+    s.ratingDifficulty.push(val);
+    await updateDoc(doc(db,"spots",id),{
+      ratingDifficulty:s.ratingDifficulty
+    });
+  } else {
+    s.ratingFun.push(val);
+    await updateDoc(doc(db,"spots",id),{
+      ratingFun:s.ratingFun
+    });
+  }
 
-    openDetail(id);
-}
+  openDetail(id);
+};
 
+// KOMENTÁŘ
+window.addComment = async function(id){
+
+  let s=spots.find(x=>x.id===id);
+  let text=document.getElementById("cinput").value;
+
+  if(!text) return;
+
+  s.comments.push(text);
+
+  await updateDoc(doc(db,"spots",id),{
+    comments:s.comments
+  });
+
+  openDetail(id);
+};
+
+// ZAVŘÍT
 window.closeModal = function(){
-    modal.style.display="none";
-}
+  modal.style.display="none";
+  document.getElementById("map").classList.remove("hidden");
+};
 
 loadSpots();
 
 </script>
-
 </body>
 </html>
