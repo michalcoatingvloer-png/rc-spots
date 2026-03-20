@@ -48,6 +48,7 @@ button {
   display:flex;
   justify-content:center;
   align-items:center;
+  z-index:1000;
 }
 
 .modal-content {
@@ -253,7 +254,6 @@ onSnapshot(collection(db,"spots"), snap=>{
 
     div.innerHTML=`
       <b>${s.name}</b><br>
-      ${s.type}<br>
       ${thumbs}
       <button onclick="openDetail('${s.id}')">Detail</button>
     `;
@@ -267,7 +267,7 @@ window.openDetail=id=>{
 
   let imgs="";
   (s.images||[]).forEach(i=>{
-    imgs+=`<img src="${i}" onclick="openImage('${i}')">`;
+    imgs+=`<img class="gallery-img" src="${i}" onclick="openImage('${i}')">`;
   });
 
   let comments="";
@@ -303,7 +303,6 @@ window.openDetail=id=>{
   document.body.appendChild(modal);
 };
 
-// 🔥 OPEN IMAGE
 window.openImage=src=>{
   document.getElementById("imageViewer").style.display="flex";
   document.getElementById("fullImg").src=src;
