@@ -2,101 +2,137 @@
 <html lang="cs">
 <head>
 <meta charset="UTF-8">
-<title>RC Spots</title>
+<title>RC Spots 🌍</title>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body { margin:0; font-family:Arial; background:#111; color:white; }
-
-#map { height:50vh; }
-
-.card {
-    background:#1e1e1e;
-    padding:10px;
-    margin:10px;
-    border-radius:10px;
-    cursor:pointer;
+body {
+  margin: 0;
+  font-family: Arial;
+  background: #111;
+  color: white;
 }
 
-/* 🔥 GRID MINIATUR */
-.thumb-grid {
-    display:flex;
-    gap:5px;
-    margin-top:5px;
+header {
+  text-align: center;
+  padding: 10px;
+  font-size: 22px;
+}
+
+#map {
+  height: 300px;
+}
+
+button {
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #4CAF50;
+  color: white;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.card {
+  background: #1e1e1e;
+  margin: 10px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.gallery {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 5px;
 }
 
 .thumb {
-    width:60px;
-    height:60px;
-    object-fit:cover;
-    border-radius:6px;
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
-/* DETAIL */
-#detailPanel {
-    position:fixed;
-    bottom:-100%;
-    width:100%;
-    height:65%;
-    background:#1a1a1a;
-    padding:15px;
-    overflow:auto;
-    transition:0.3s;
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-#detailPanel.active { bottom:0; }
-
-.detail-img {
-    width:100%;
-    margin-top:5px;
-    border-radius:8px;
-    cursor:pointer;
+.modal-content {
+  background: #1e1e1e;
+  padding: 15px;
+  border-radius: 10px;
+  width: 90%;
+  max-height: 80%;
+  overflow-y: auto;
 }
 
 .comment {
-    background:#2a2a2a;
-    padding:5px;
-    margin-top:5px;
-    border-radius:5px;
+  background: #2a2a2a;
+  padding: 6px;
+  margin-top: 5px;
+  border-radius: 6px;
+  font-size: 14px;
 }
 
-input, button {
-    width:100%;
-    padding:10px;
-    margin-top:5px;
-    border:none;
-    border-radius:6px;
+input, select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  margin-top: 5px;
 }
 </style>
 </head>
+
 <body>
 
+<header>RC Spots 🌍</header>
+
 <div id="map"></div>
+
+<div style="padding:10px;">
+  <button onclick="toggleAdd()">➕ Přidat spot</button>
+
+  <div id="addForm" style="display:none;">
+    <input id="name" placeholder="Název spotu">
+    <input id="type" placeholder="Typ (crawler/buggy)">
+    <input id="length" placeholder="Délka tratě (m)">
+
+    <select id="difficulty">
+      <option value="">Obtížnost</option>
+      <option value="Lehká">Lehká</option>
+      <option value="Střední">Střední</option>
+      <option value="Těžká">Těžká</option>
+    </select>
+
+    <input type="file" id="photos" multiple>
+
+    <button onclick="saveSpot()">Uložit spot</button>
+  </div>
+</div>
+
+<h3 style="padding:10px;">🌍 Veřejné spoty</h3>
+
 <div id="list"></div>
 
-<!-- DETAIL -->
-<div id="detailPanel">
-<h3 id="d_name"></h3>
-<div id="d_type"></div>
-
-<div id="gallery"></div>
-
-<div id="comments"></div>
-
-<input id="commentInput" placeholder="Komentář">
-<button onclick="addComment()">Přidat komentář</button>
-
-<button onclick="navigate()">Navigovat</button>
-<button onclick="closeDetail()">Zavřít</button>
-</div>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script type="module">
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDMDxeThwcGUICTptG3Cmll31D7h63Sh4U",
@@ -107,153 +143,184 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let map = L.map('map').setView([49.8,15.5],7);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+let map = L.map('map').setView([49.8, 15.5], 7);
 
-let userPos = null;
-let selectedSpot = null;
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+.addTo(map);
 
-// GPS
-navigator.geolocation.getCurrentPosition(pos=>{
-    userPos = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-    };
+let selectedLatLng = null;
+let spots = [];
+let adding = false;
 
-    map.setView([userPos.lat,userPos.lng],13);
-
-    L.circleMarker([userPos.lat,userPos.lng],{
-        radius:8,
-        color:"red"
-    }).addTo(map);
+map.on('click', function(e) {
+  if (!adding) return;
+  selectedLatLng = e.latlng;
+  alert("Místo vybráno");
 });
 
-// vzdálenost
-function getDistance(a,b){
-    let R = 6371;
-    let dLat = (b.lat-a.lat)*Math.PI/180;
-    let dLng = (b.lng-a.lng)*Math.PI/180;
-
-    let x = Math.sin(dLat/2)**2 +
-        Math.cos(a.lat*Math.PI/180)*
-        Math.cos(b.lat*Math.PI/180)*
-        Math.sin(dLng/2)**2;
-
-    return R * 2 * Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+window.toggleAdd = function() {
+  adding = !adding;
+  document.getElementById("addForm").style.display = adding ? "block" : "none";
 }
 
-// DETAIL
-window.openDetail = function(spot,id){
+window.saveSpot = async function() {
+  if (!selectedLatLng) {
+    alert("Klikni na mapu!");
+    return;
+  }
 
-    selectedSpot = { ...spot, id };
+  const name = nameInput.value;
+  const type = typeInput.value;
+  const length = lengthInput.value;
+  const difficulty = difficulty.value;
+  const files = photos.files;
 
-    d_name.innerText = spot.name;
-    d_type.innerText = spot.type;
+  let images = [];
 
-    gallery.innerHTML="";
-    (spot.images||[]).forEach(img=>{
-        gallery.innerHTML += `<img class="detail-img" src="${img}" onclick="openImage('${img}')">`;
+  for (let file of files) {
+    let base64 = await resizeImage(file);
+    images.push(base64);
+  }
+
+  await addDoc(collection(db, "spots"), {
+    name,
+    type,
+    length,
+    difficulty,
+    lat: selectedLatLng.lat,
+    lng: selectedLatLng.lng,
+    images,
+    comments: []
+  });
+
+  alert("Uloženo!");
+}
+
+function resizeImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = e => img.src = e.target.result;
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const max = 800;
+
+      let w = img.width;
+      let h = img.height;
+
+      if (w > h && w > max) {
+        h *= max / w;
+        w = max;
+      } else if (h > max) {
+        w *= max / h;
+        h = max;
+      }
+
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+onSnapshot(collection(db, "spots"), snapshot => {
+
+  spots = [];
+  list.innerHTML = "";
+
+  snapshot.forEach(docSnap => {
+    const s = docSnap.data();
+    s.id = docSnap.id;
+    spots.push(s);
+
+    L.marker([s.lat, s.lng])
+      .addTo(map)
+      .bindTooltip(`${s.name} (${s.type})`);
+
+    let thumbs = "";
+    (s.images || []).slice(0,3).forEach(img => {
+      thumbs += `<img class="thumb" src="${img}">`;
     });
 
-    comments.innerHTML="";
-    (spot.comments||[]).forEach(c=>{
-        comments.innerHTML += `<div class="comment">${c.text}</div>`;
-    });
+    const div = document.createElement("div");
+    div.className = "card";
 
-    detailPanel.classList.add("active");
-};
+    div.innerHTML = `
+      <b>${s.name}</b><br>
+      ${s.type}<br>
+      📏 ${s.length || "-"} m<br>
+      ⚡ ${s.difficulty || "-"}
+      <div class="gallery">${thumbs}</div>
+      <button onclick="openDetail('${s.id}')">Detail</button>
+    `;
 
-window.closeDetail = function(){
-    detailPanel.classList.remove("active");
-};
-
-// otevřít fotku
-window.openImage = function(src){
-    let w = window.open("");
-    w.document.write(`<img src="${src}" style="width:100%">`);
-};
-
-// komentář
-window.addComment = async function(){
-
-    let text = commentInput.value;
-    if (!text) return;
-
-    let ref = doc(db,"spots",selectedSpot.id);
-
-    let newComments = (selectedSpot.comments||[]).concat({
-        text:text
-    });
-
-    await updateDoc(ref,{ comments:newComments });
-
-    commentInput.value="";
-};
-
-// navigace
-window.navigate = function(){
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${selectedSpot.lat},${selectedSpot.lng}`);
-};
-
-// realtime
-onSnapshot(collection(db,"spots"), snapshot=>{
-
-    list.innerHTML="";
-    map.eachLayer(l=>{
-        if (l instanceof L.Marker) map.removeLayer(l);
-    });
-
-    let spots=[];
-
-    snapshot.forEach(doc=>{
-        let s = doc.data();
-        s.id = doc.id;
-
-        if (userPos){
-            s.distance = getDistance(userPos,s);
-        } else {
-            s.distance = 999;
-        }
-
-        spots.push(s);
-    });
-
-    spots.sort((a,b)=>a.distance-b.distance);
-
-    spots.forEach(s=>{
-
-        // marker
-        L.marker([s.lat,s.lng])
-            .addTo(map)
-            .on("click",()=>openDetail(s,s.id));
-
-        // 🔥 miniatury (max 3)
-        let thumbs = "";
-        if (s.images) {
-            thumbs = `<div class="thumb-grid">` +
-                s.images.slice(0,3).map(img =>
-                    `<img class="thumb" src="${img}">`
-                ).join("") +
-                `</div>`;
-        }
-
-        let div=document.createElement("div");
-        div.className="card";
-
-        div.innerHTML=`
-            <b>${s.name}</b><br>
-            ${s.type}<br>
-            📏 ${s.distance.toFixed(1)} km
-            ${thumbs}
-        `;
-
-        div.onclick=()=>openDetail(s,s.id);
-
-        list.appendChild(div);
-
-    });
-
+    list.appendChild(div);
+  });
 });
+
+window.openDetail = function(id) {
+  const spot = spots.find(s => s.id === id);
+
+  let imagesHTML = "";
+  (spot.images || []).forEach(img => {
+    imagesHTML += `<img class="thumb" src="${img}" onclick="window.open('${img}')">`;
+  });
+
+  let commentsHTML = "";
+  (spot.comments || []).forEach(c => {
+    commentsHTML += `<div class="comment">${c.text}</div>`;
+  });
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h2>${spot.name}</h2>
+      <p>${spot.type}</p>
+      <p>📏 ${spot.length || "-"} m</p>
+      <p>⚡ ${spot.difficulty || "-"}</p>
+
+      <h3>📷 Fotky</h3>
+      <div class="gallery">${imagesHTML}</div>
+
+      <h3>💬 Komentáře</h3>
+      ${commentsHTML}
+
+      <input id="commentInput" placeholder="Napiš komentář">
+      <button onclick="addComment('${spot.id}')">Přidat komentář</button>
+
+      <button onclick="this.parentElement.parentElement.remove()">Zavřít</button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+window.addComment = async function(id) {
+  const spot = spots.find(s => s.id === id);
+  const text = document.getElementById("commentInput").value;
+
+  if (!text) return;
+
+  const ref = doc(db, "spots", id);
+
+  const newComments = (spot.comments || []).concat({
+    text
+  });
+
+  await updateDoc(ref, { comments: newComments });
+
+  alert("Komentář přidán");
+}
 
 </script>
 
