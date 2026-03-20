@@ -3,95 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <title>RC Spots 🌍</title>
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
 body {
-  margin: 0;
-  font-family: Arial;
-  background: #111;
-  color: white;
+  margin:0;
+  font-family:Arial;
+  background:#111;
+  color:white;
 }
 
 header {
-  text-align: center;
-  padding: 10px;
-  font-size: 22px;
+  text-align:center;
+  padding:10px;
+  font-size:22px;
 }
 
-#map {
-  height: 300px;
-}
+#map { height:300px; }
 
 button {
-  padding: 10px;
-  border: none;
-  border-radius: 8px;
-  background: #4CAF50;
-  color: white;
-  width: 100%;
-  margin-top: 10px;
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  background:#4CAF50;
+  color:white;
+  width:100%;
+  margin-top:10px;
 }
 
 .card {
-  background: #1e1e1e;
-  margin: 10px;
-  padding: 10px;
-  border-radius: 10px;
+  background:#1e1e1e;
+  margin:10px;
+  padding:10px;
+  border-radius:10px;
 }
 
-.gallery {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 5px;
-}
-
+/* MINIATURY */
 .thumb {
-  width: 60px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 6px;
+  width:60px;
+  height:60px;
+  object-fit:cover;
+  border-radius:6px;
+  margin-right:5px;
 }
 
+/* DETAIL MODAL */
 .modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.9);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.95);
+  display:flex;
+  justify-content:center;
+  align-items:center;
 }
 
 .modal-content {
-  background: #1e1e1e;
-  padding: 15px;
-  border-radius: 10px;
-  width: 90%;
-  max-height: 80%;
-  overflow-y: auto;
+  background:#1e1e1e;
+  padding:15px;
+  border-radius:12px;
+  width:90%;
+  max-height:85%;
+  overflow:auto;
 }
 
+/* SEKCE */
+.section {
+  margin-top:15px;
+}
+
+.section-title {
+  font-weight:bold;
+  margin-bottom:5px;
+}
+
+/* GALERIE */
+.gallery {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.gallery img {
+  width:90px;
+  height:90px;
+  object-fit:cover;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+/* KOMENTÁŘE */
 .comment {
-  background: #2a2a2a;
-  padding: 6px;
-  margin-top: 5px;
-  border-radius: 6px;
-  font-size: 14px;
+  background:#2a2a2a;
+  padding:6px;
+  margin-top:5px;
+  border-radius:6px;
+  font-size:14px;
 }
 
 input, select {
-  width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: none;
-  margin-top: 5px;
+  width:100%;
+  padding:10px;
+  border-radius:8px;
+  border:none;
+  margin-top:5px;
 }
 </style>
 </head>
@@ -103,27 +122,25 @@ input, select {
 <div id="map"></div>
 
 <div style="padding:10px;">
-  <button onclick="toggleAdd()">➕ Přidat spot</button>
+<button onclick="toggleAdd()">➕ Přidat spot</button>
 
-  <div id="addForm" style="display:none;">
-    <input id="name" placeholder="Název spotu">
-    <input id="type" placeholder="Typ (crawler/buggy)">
-    <input id="length" placeholder="Délka tratě (m)">
+<div id="addForm" style="display:none;">
+<input id="name" placeholder="Název">
+<input id="type" placeholder="Typ">
+<input id="length" placeholder="Délka (m)">
 
-    <select id="difficulty">
-      <option value="">Obtížnost</option>
-      <option value="Lehká">Lehká</option>
-      <option value="Střední">Střední</option>
-      <option value="Těžká">Těžká</option>
-    </select>
+<select id="difficulty">
+<option value="">Obtížnost</option>
+<option>Lehká</option>
+<option>Střední</option>
+<option>Těžká</option>
+</select>
 
-    <input type="file" id="photos" multiple>
+<input type="file" id="photos" multiple>
 
-    <button onclick="saveSpot()">Uložit spot</button>
-  </div>
+<button onclick="saveSpot()">Uložit</button>
 </div>
-
-<h3 style="padding:10px;">🌍 Veřejné spoty</h3>
+</div>
 
 <div id="list"></div>
 
@@ -143,184 +160,167 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let map = L.map('map').setView([49.8, 15.5], 7);
+let map = L.map('map').setView([49.8,15.5],7);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-.addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let selectedLatLng = null;
-let spots = [];
-let adding = false;
+let selectedLatLng=null;
+let spots=[];
+let adding=false;
 
-map.on('click', function(e) {
-  if (!adding) return;
-  selectedLatLng = e.latlng;
+map.on('click', e=>{
+  if(!adding) return;
+  selectedLatLng=e.latlng;
   alert("Místo vybráno");
 });
 
-window.toggleAdd = function() {
-  adding = !adding;
-  document.getElementById("addForm").style.display = adding ? "block" : "none";
-}
+window.toggleAdd=()=>{
+  adding=!adding;
+  addForm.style.display=adding?"block":"none";
+};
 
-window.saveSpot = async function() {
-  if (!selectedLatLng) {
-    alert("Klikni na mapu!");
-    return;
+window.saveSpot=async()=>{
+  if(!selectedLatLng) return alert("Klikni na mapu");
+
+  let images=[];
+  for(let f of photos.files){
+    images.push(await resizeImage(f));
   }
 
-  const name = nameInput.value;
-  const type = typeInput.value;
-  const length = lengthInput.value;
-  const difficulty = difficulty.value;
-  const files = photos.files;
-
-  let images = [];
-
-  for (let file of files) {
-    let base64 = await resizeImage(file);
-    images.push(base64);
-  }
-
-  await addDoc(collection(db, "spots"), {
-    name,
-    type,
-    length,
-    difficulty,
-    lat: selectedLatLng.lat,
-    lng: selectedLatLng.lng,
+  await addDoc(collection(db,"spots"),{
+    name:nameInput.value,
+    type:typeInput.value,
+    length:lengthInput.value,
+    difficulty:difficulty.value,
+    lat:selectedLatLng.lat,
+    lng:selectedLatLng.lng,
     images,
-    comments: []
+    comments:[]
   });
 
-  alert("Uloženo!");
-}
+  alert("Uloženo");
+};
 
-function resizeImage(file) {
-  return new Promise(resolve => {
-    const img = new Image();
-    const reader = new FileReader();
+function resizeImage(file){
+  return new Promise(res=>{
+    let img=new Image();
+    let reader=new FileReader();
 
-    reader.onload = e => img.src = e.target.result;
+    reader.onload=e=>img.src=e.target.result;
 
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const max = 800;
+    img.onload=()=>{
+      let canvas=document.createElement("canvas");
+      let ctx=canvas.getContext("2d");
 
-      let w = img.width;
-      let h = img.height;
+      let max=800;
+      let w=img.width,h=img.height;
 
-      if (w > h && w > max) {
-        h *= max / w;
-        w = max;
-      } else if (h > max) {
-        w *= max / h;
-        h = max;
-      }
+      if(w>max){h*=max/w;w=max;}
+      if(h>max){w*=max/h;h=max;}
 
-      canvas.width = w;
-      canvas.height = h;
+      canvas.width=w;
+      canvas.height=h;
 
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, w, h);
+      ctx.drawImage(img,0,0,w,h);
 
-      resolve(canvas.toDataURL("image/jpeg", 0.7));
+      res(canvas.toDataURL("image/jpeg",0.7));
     };
 
     reader.readAsDataURL(file);
   });
 }
 
-onSnapshot(collection(db, "spots"), snapshot => {
+onSnapshot(collection(db,"spots"), snap=>{
 
-  spots = [];
-  list.innerHTML = "";
+  list.innerHTML="";
+  spots=[];
 
-  snapshot.forEach(docSnap => {
-    const s = docSnap.data();
-    s.id = docSnap.id;
+  snap.forEach(docSnap=>{
+    let s=docSnap.data();
+    s.id=docSnap.id;
     spots.push(s);
 
-    L.marker([s.lat, s.lng])
-      .addTo(map)
-      .bindTooltip(`${s.name} (${s.type})`);
+    L.marker([s.lat,s.lng]).addTo(map);
 
-    let thumbs = "";
-    (s.images || []).slice(0,3).forEach(img => {
-      thumbs += `<img class="thumb" src="${img}">`;
+    let thumbs="";
+    (s.images||[]).slice(0,3).forEach(i=>{
+      thumbs+=`<img class="thumb" src="${i}">`;
     });
 
-    const div = document.createElement("div");
-    div.className = "card";
+    let div=document.createElement("div");
+    div.className="card";
 
-    div.innerHTML = `
+    div.innerHTML=`
       <b>${s.name}</b><br>
       ${s.type}<br>
-      📏 ${s.length || "-"} m<br>
-      ⚡ ${s.difficulty || "-"}
-      <div class="gallery">${thumbs}</div>
+      📏 ${s.length||"-"} m<br>
+      ⚡ ${s.difficulty||"-"}<br>
+      ${thumbs}
       <button onclick="openDetail('${s.id}')">Detail</button>
     `;
 
     list.appendChild(div);
   });
+
 });
 
-window.openDetail = function(id) {
-  const spot = spots.find(s => s.id === id);
+window.openDetail=id=>{
 
-  let imagesHTML = "";
-  (spot.images || []).forEach(img => {
-    imagesHTML += `<img class="thumb" src="${img}" onclick="window.open('${img}')">`;
+  let s=spots.find(x=>x.id===id);
+
+  let imgs="";
+  (s.images||[]).forEach(i=>{
+    imgs+=`<img src="${i}" onclick="window.open('${i}')">`;
   });
 
-  let commentsHTML = "";
-  (spot.comments || []).forEach(c => {
-    commentsHTML += `<div class="comment">${c.text}</div>`;
+  let comments="";
+  (s.comments||[]).forEach(c=>{
+    comments+=`<div class="comment">${c.text}</div>`;
   });
 
-  const modal = document.createElement("div");
-  modal.className = "modal";
+  let modal=document.createElement("div");
+  modal.className="modal";
 
-  modal.innerHTML = `
-    <div class="modal-content">
-      <h2>${spot.name}</h2>
-      <p>${spot.type}</p>
-      <p>📏 ${spot.length || "-"} m</p>
-      <p>⚡ ${spot.difficulty || "-"}</p>
+  modal.innerHTML=`
+  <div class="modal-content">
 
-      <h3>📷 Fotky</h3>
-      <div class="gallery">${imagesHTML}</div>
+    <h2>${s.name}</h2>
+    <div>${s.type}</div>
+    <div>📏 ${s.length||"-"} m</div>
+    <div>⚡ ${s.difficulty||"-"}</div>
 
-      <h3>💬 Komentáře</h3>
-      ${commentsHTML}
-
-      <input id="commentInput" placeholder="Napiš komentář">
-      <button onclick="addComment('${spot.id}')">Přidat komentář</button>
-
-      <button onclick="this.parentElement.parentElement.remove()">Zavřít</button>
+    <div class="section">
+      <div class="section-title">📷 Fotky</div>
+      <div class="gallery">${imgs||"Žádné fotky"}</div>
     </div>
+
+    <div class="section">
+      <div class="section-title">💬 Komentáře</div>
+      ${comments}
+      <input id="cinput" placeholder="Napiš komentář">
+      <button onclick="addComment('${s.id}')">Přidat</button>
+    </div>
+
+    <button onclick="this.parentElement.parentElement.remove()">Zavřít</button>
+
+  </div>
   `;
 
   document.body.appendChild(modal);
-}
+};
 
-window.addComment = async function(id) {
-  const spot = spots.find(s => s.id === id);
-  const text = document.getElementById("commentInput").value;
+window.addComment=async id=>{
 
-  if (!text) return;
+  let text=document.getElementById("cinput").value;
+  if(!text) return;
 
-  const ref = doc(db, "spots", id);
+  let s=spots.find(x=>x.id===id);
 
-  const newComments = (spot.comments || []).concat({
-    text
+  await updateDoc(doc(db,"spots",id),{
+    comments:[...(s.comments||[]),{text}]
   });
 
-  await updateDoc(ref, { comments: newComments });
-
-  alert("Komentář přidán");
-}
+};
 
 </script>
 
