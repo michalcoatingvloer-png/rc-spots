@@ -11,10 +11,7 @@
 body { margin:0; font-family:Arial; background:#0f0f0f; color:white; }
 h1 { text-align:center; }
 
-#map {
-  height:300px;
-  transition:0.3s;
-}
+#map { height:300px; transition:0.3s; }
 #map.hidden { height:0; }
 
 button {
@@ -123,15 +120,59 @@ const db = getFirestore(app);
 let map = L.map('map').setView([49.8,15.5],7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let newLat, newLng;
+let userPos = null;
+
+// GPS
+navigator.geolocation.watchPosition(pos=>{
+
+  userPos = {
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude
+  };
+
+  if(window.userMarker){
+    map.removeLayer(window.userMarker);
+  }
+
+  window.userMarker = L.circleMarker([userPos.lat, userPos.lng],{
+    color:"red",
+    radius:8
+  }).addTo(map);
+
+  map.setView([userPos.lat, userPos.lng], 13);
+
+  list.innerHTML = "";
+  spots = [];
+  loadSpots();
+
+}, err=>{
+  console.log("GPS chyba:", err);
+}, {
+  enableHighAccuracy:true
+});
+
+// vzdálenost
+function getDistance(a,b){
+  let R=6371;
+  let dLat=(b.lat-a.lat)*Math.PI/180;
+  let dLng=(b.lng-a.lng)*Math.PI/180;
+
+  let x=Math.sin(dLat/2)**2 +
+  Math.cos(a.lat*Math.PI/180) *
+  Math.cos(b.lat*Math.PI/180) *
+  Math.sin(dLng/2)**2;
+
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+let newLat,newLng;
 
 map.on("click", e=>{
-  newLat = e.latlng.lat;
-  newLng = e.latlng.lng;
+  newLat=e.latlng.lat;
+  newLng=e.latlng.lng;
   alert("Klikni uložit spot");
 });
 
-// FORM
 window.toggleForm = function(){
   form.style.display = form.style.display==="none"?"block":"none";
 }
@@ -175,7 +216,19 @@ async function loadSpots(){
   snap.forEach(d=>{
     let s=d.data();
     s.id=d.id;
+
+    if(userPos){
+      s.distance = getDistance(userPos,s);
+    } else {
+      s.distance = 999;
+    }
+
     spots.push(s);
+  });
+
+  spots.sort((a,b)=>a.distance-b.distance);
+
+  spots.forEach(s=>{
 
     let div=document.createElement("div");
     div.className="card";
@@ -187,7 +240,7 @@ async function loadSpots(){
 
     div.innerHTML=`
       <b>${s.name}</b><br>
-      ${s.type}<br>
+      📏 ${s.distance.toFixed(1)} km<br>
       ${thumbs}
       <button onclick="openDetail('${s.id}')">Detail</button>
     `;
@@ -198,7 +251,7 @@ async function loadSpots(){
   });
 }
 
-// 🔥 DETAIL
+// 🔥 DETAIL (přidáno hodnocení)
 window.openDetail = function(id){
 
   document.getElementById("map").classList.add("hidden");
@@ -227,8 +280,7 @@ window.openDetail = function(id){
   <div class="modal-content">
 
   <h2>${s.name}</h2>
-  <p>${s.type} • ${s.difficulty}</p>
-  <p>${s.length} m</p>
+  <p>📏 ${s.distance.toFixed(1)} km</p>
 
   <h3>⭐ Obtížnost: ${avgDiff}</h3>
   <button onclick="rate('${id}','difficulty',5)">5</button>
@@ -256,7 +308,7 @@ window.openDetail = function(id){
   modal.style.display="block";
 };
 
-// HODNOCENÍ
+// 🔥 HODNOCENÍ
 window.rate = async function(id,type,val){
 
   let s=spots.find(x=>x.id===id);
@@ -276,6 +328,12 @@ window.rate = async function(id,type,val){
   openDetail(id);
 };
 
+// ZAVŘÍT
+window.closeModal = function(){
+  modal.style.display="none";
+  document.getElementById("map").classList.remove("hidden");
+};
+
 // KOMENTÁŘ
 window.addComment = async function(id){
 
@@ -291,12 +349,6 @@ window.addComment = async function(id){
   });
 
   openDetail(id);
-};
-
-// ZAVŘÍT
-window.closeModal = function(){
-  modal.style.display="none";
-  document.getElementById("map").classList.remove("hidden");
 };
 
 loadSpots();
