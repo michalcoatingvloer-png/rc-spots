@@ -12,6 +12,13 @@ body { margin:0; font-family:Arial; background:#111; color:white; }
 
 #map { height:300px; }
 
+.card {
+  background:#1e1e1e;
+  margin:10px;
+  padding:10px;
+  border-radius:10px;
+}
+
 button {
   padding:10px;
   border:none;
@@ -22,19 +29,24 @@ button {
   margin-top:10px;
 }
 
-.card {
-  background:#1e1e1e;
-  margin:10px;
-  padding:10px;
-  border-radius:10px;
-}
-
 .thumb {
   width:60px;
   height:60px;
   object-fit:cover;
   border-radius:6px;
-  margin-right:5px;
+}
+
+.gallery {
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+}
+
+.gallery img {
+  width:90px;
+  height:90px;
+  object-fit:cover;
+  border-radius:8px;
 }
 
 /* DETAIL */
@@ -60,31 +72,8 @@ button {
   overflow:auto;
 }
 
-/* SECTIONS */
-.section { margin-top:15px; }
-
-.section-title {
-  font-weight:bold;
-  margin-bottom:5px;
-}
-
-/* GALERIE */
-.gallery {
-  display:flex;
-  flex-wrap:wrap;
-  gap:6px;
-}
-
-.gallery img {
-  width:90px;
-  height:90px;
-  object-fit:cover;
-  border-radius:8px;
-  cursor:pointer;
-}
-
-/* 🔥 FULLSCREEN IMAGE */
-#imageViewer {
+/* FULLSCREEN FOTO */
+#viewer {
   position:fixed;
   top:0;
   left:0;
@@ -97,12 +86,11 @@ button {
   z-index:9999;
 }
 
-#imageViewer img {
+#viewer img {
   max-width:100%;
   max-height:100%;
 }
 
-/* KOMENTÁŘ */
 .comment {
   background:#2a2a2a;
   padding:6px;
@@ -110,13 +98,7 @@ button {
   border-radius:6px;
 }
 
-input, select {
-  width:100%;
-  padding:10px;
-  border-radius:8px;
-  border:none;
-  margin-top:5px;
-}
+input { width:100%; padding:10px; margin-top:5px; }
 </style>
 </head>
 
@@ -130,26 +112,15 @@ input, select {
 <div id="addForm" style="display:none;">
 <input id="name" placeholder="Název">
 <input id="type" placeholder="Typ">
-<input id="length" placeholder="Délka">
-
-<select id="difficulty">
-<option>Obtížnost</option>
-<option>Lehká</option>
-<option>Střední</option>
-<option>Těžká</option>
-</select>
-
 <input type="file" id="photos" multiple>
-
 <button onclick="saveSpot()">Uložit</button>
 </div>
 </div>
 
 <div id="list"></div>
 
-<!-- 🔥 IMAGE VIEWER -->
-<div id="imageViewer" onclick="closeImage()">
-  <img id="fullImg">
+<div id="viewer" onclick="this.style.display='none'">
+  <img id="viewerImg">
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -160,78 +131,49 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const app = initializeApp({
-  apiKey: "AIzaSyDMDxeThwcGUICTptG3Cmll31D7h63Sh4U",
+  apiKey: "AIzaSy...",
   authDomain: "rc-spots-ef03d.firebaseapp.com",
   projectId: "rc-spots-ef03d"
 });
 
 const db = getFirestore(app);
 
+// MAPA
 let map = L.map('map').setView([49.8,15.5],7);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let selectedLatLng=null;
-let spots=[];
-let adding=false;
+let userPos=null;
 
-map.on('click', e=>{
-  if(!adding) return;
-  selectedLatLng=e.latlng;
-  alert("Místo vybráno");
+// 📍 GPS
+navigator.geolocation.getCurrentPosition(pos=>{
+  userPos={
+    lat:pos.coords.latitude,
+    lng:pos.coords.longitude
+  };
+
+  L.circleMarker([userPos.lat,userPos.lng],{
+    color:"red",
+    radius:8
+  }).addTo(map);
+
+  map.setView([userPos.lat,userPos.lng],13);
 });
 
-window.toggleAdd=()=>{
-  adding=!adding;
-  addForm.style.display=adding?"block":"none";
-};
+// 📏 vzdálenost
+function dist(a,b){
+  let R=6371;
+  let dLat=(b.lat-a.lat)*Math.PI/180;
+  let dLng=(b.lng-a.lng)*Math.PI/180;
 
-window.saveSpot=async()=>{
-  if(!selectedLatLng) return alert("Klikni na mapu");
+  let x=Math.sin(dLat/2)**2+
+  Math.cos(a.lat*Math.PI/180)*
+  Math.cos(b.lat*Math.PI/180)*
+  Math.sin(dLng/2)**2;
 
-  let images=[];
-  for(let f of photos.files){
-    images.push(await resizeImage(f));
-  }
-
-  await addDoc(collection(db,"spots"),{
-    name:nameInput.value,
-    type:typeInput.value,
-    length:lengthInput.value,
-    difficulty:difficulty.value,
-    lat:selectedLatLng.lat,
-    lng:selectedLatLng.lng,
-    images,
-    comments:[]
-  });
-
-  alert("Uloženo");
-};
-
-function resizeImage(file){
-  return new Promise(res=>{
-    let img=new Image();
-    let r=new FileReader();
-    r.onload=e=>img.src=e.target.result;
-
-    img.onload=()=>{
-      let c=document.createElement("canvas");
-      let ctx=c.getContext("2d");
-
-      let max=800;
-      let w=img.width,h=img.height;
-
-      if(w>max){h*=max/w;w=max;}
-      if(h>max){w*=max/h;h=max;}
-
-      c.width=w;c.height=h;
-      ctx.drawImage(img,0,0,w,h);
-
-      res(c.toDataURL("image/jpeg",0.7));
-    };
-
-    r.readAsDataURL(file);
-  });
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
+
+let spots=[];
 
 onSnapshot(collection(db,"spots"), snap=>{
   list.innerHTML="";
@@ -240,7 +182,18 @@ onSnapshot(collection(db,"spots"), snap=>{
   snap.forEach(d=>{
     let s=d.data();
     s.id=d.id;
+
+    if(userPos){
+      s.distance=dist(userPos,s);
+    } else s.distance=999;
+
     spots.push(s);
+  });
+
+  // 🔥 SEŘAZENÍ
+  spots.sort((a,b)=>a.distance-b.distance);
+
+  spots.forEach(s=>{
 
     L.marker([s.lat,s.lng]).addTo(map);
 
@@ -254,6 +207,7 @@ onSnapshot(collection(db,"spots"), snap=>{
 
     div.innerHTML=`
       <b>${s.name}</b><br>
+      📏 ${s.distance.toFixed(1)} km<br>
       ${thumbs}
       <button onclick="openDetail('${s.id}')">Detail</button>
     `;
@@ -262,17 +216,13 @@ onSnapshot(collection(db,"spots"), snap=>{
   });
 });
 
+// DETAIL
 window.openDetail=id=>{
   let s=spots.find(x=>x.id===id);
 
   let imgs="";
   (s.images||[]).forEach(i=>{
-    imgs+=`<img class="gallery-img" src="${i}" onclick="openImage('${i}')">`;
-  });
-
-  let comments="";
-  (s.comments||[]).forEach(c=>{
-    comments+=`<div class="comment">${c.text}</div>`;
+    imgs+=`<img src="${i}" onclick="showImg('${i}')">`;
   });
 
   let modal=document.createElement("div");
@@ -280,47 +230,21 @@ window.openDetail=id=>{
 
   modal.innerHTML=`
   <div class="modal-content">
-
     <h2>${s.name}</h2>
 
-    <div class="section">
-      <div class="section-title">📷 Fotky</div>
-      <div class="gallery">${imgs}</div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">💬 Komentáře</div>
-      ${comments}
-      <input id="cinput">
-      <button onclick="addComment('${s.id}')">Přidat</button>
-    </div>
+    <div class="gallery">${imgs}</div>
 
     <button onclick="this.parentElement.parentElement.remove()">Zavřít</button>
-
   </div>
   `;
 
   document.body.appendChild(modal);
 };
 
-window.openImage=src=>{
-  document.getElementById("imageViewer").style.display="flex";
-  document.getElementById("fullImg").src=src;
-};
-
-window.closeImage=()=>{
-  document.getElementById("imageViewer").style.display="none";
-};
-
-window.addComment=async id=>{
-  let s=spots.find(x=>x.id===id);
-  let text=document.getElementById("cinput").value;
-
-  if(!text) return;
-
-  await updateDoc(doc(db,"spots",id),{
-    comments:[...(s.comments||[]),{text}]
-  });
+// 🔥 FOTO FUNKCE (funguje na mobilu)
+window.showImg=src=>{
+  viewer.style.display="flex";
+  viewerImg.src=src;
 };
 
 </script>
