@@ -8,18 +8,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
-body {
-  margin:0;
-  font-family:Arial;
-  background:#111;
-  color:white;
-}
-
-header {
-  text-align:center;
-  padding:10px;
-  font-size:22px;
-}
+body { margin:0; font-family:Arial; background:#111; color:white; }
 
 #map { height:300px; }
 
@@ -40,7 +29,6 @@ button {
   border-radius:10px;
 }
 
-/* MINIATURY */
 .thumb {
   width:60px;
   height:60px;
@@ -49,7 +37,7 @@ button {
   margin-right:5px;
 }
 
-/* DETAIL MODAL */
+/* DETAIL */
 .modal {
   position:fixed;
   top:0;
@@ -71,10 +59,8 @@ button {
   overflow:auto;
 }
 
-/* SEKCE */
-.section {
-  margin-top:15px;
-}
+/* SECTIONS */
+.section { margin-top:15px; }
 
 .section-title {
   font-weight:bold;
@@ -96,13 +82,31 @@ button {
   cursor:pointer;
 }
 
-/* KOMENTÁŘE */
+/* 🔥 FULLSCREEN IMAGE */
+#imageViewer {
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:black;
+  display:none;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+}
+
+#imageViewer img {
+  max-width:100%;
+  max-height:100%;
+}
+
+/* KOMENTÁŘ */
 .comment {
   background:#2a2a2a;
   padding:6px;
   margin-top:5px;
   border-radius:6px;
-  font-size:14px;
 }
 
 input, select {
@@ -117,8 +121,6 @@ input, select {
 
 <body>
 
-<header>RC Spots 🌍</header>
-
 <div id="map"></div>
 
 <div style="padding:10px;">
@@ -127,10 +129,10 @@ input, select {
 <div id="addForm" style="display:none;">
 <input id="name" placeholder="Název">
 <input id="type" placeholder="Typ">
-<input id="length" placeholder="Délka (m)">
+<input id="length" placeholder="Délka">
 
 <select id="difficulty">
-<option value="">Obtížnost</option>
+<option>Obtížnost</option>
 <option>Lehká</option>
 <option>Střední</option>
 <option>Těžká</option>
@@ -144,6 +146,11 @@ input, select {
 
 <div id="list"></div>
 
+<!-- 🔥 IMAGE VIEWER -->
+<div id="imageViewer" onclick="closeImage()">
+  <img id="fullImg">
+</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script type="module">
@@ -151,17 +158,15 @@ input, select {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const firebaseConfig = {
+const app = initializeApp({
   apiKey: "AIzaSyDMDxeThwcGUICTptG3Cmll31D7h63Sh4U",
   authDomain: "rc-spots-ef03d.firebaseapp.com",
   projectId: "rc-spots-ef03d"
-};
+});
 
-const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let map = L.map('map').setView([49.8,15.5],7);
-
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let selectedLatLng=null;
@@ -204,13 +209,12 @@ window.saveSpot=async()=>{
 function resizeImage(file){
   return new Promise(res=>{
     let img=new Image();
-    let reader=new FileReader();
-
-    reader.onload=e=>img.src=e.target.result;
+    let r=new FileReader();
+    r.onload=e=>img.src=e.target.result;
 
     img.onload=()=>{
-      let canvas=document.createElement("canvas");
-      let ctx=canvas.getContext("2d");
+      let c=document.createElement("canvas");
+      let ctx=c.getContext("2d");
 
       let max=800;
       let w=img.width,h=img.height;
@@ -218,26 +222,23 @@ function resizeImage(file){
       if(w>max){h*=max/w;w=max;}
       if(h>max){w*=max/h;h=max;}
 
-      canvas.width=w;
-      canvas.height=h;
-
+      c.width=w;c.height=h;
       ctx.drawImage(img,0,0,w,h);
 
-      res(canvas.toDataURL("image/jpeg",0.7));
+      res(c.toDataURL("image/jpeg",0.7));
     };
 
-    reader.readAsDataURL(file);
+    r.readAsDataURL(file);
   });
 }
 
 onSnapshot(collection(db,"spots"), snap=>{
-
   list.innerHTML="";
   spots=[];
 
-  snap.forEach(docSnap=>{
-    let s=docSnap.data();
-    s.id=docSnap.id;
+  snap.forEach(d=>{
+    let s=d.data();
+    s.id=d.id;
     spots.push(s);
 
     L.marker([s.lat,s.lng]).addTo(map);
@@ -253,24 +254,20 @@ onSnapshot(collection(db,"spots"), snap=>{
     div.innerHTML=`
       <b>${s.name}</b><br>
       ${s.type}<br>
-      📏 ${s.length||"-"} m<br>
-      ⚡ ${s.difficulty||"-"}<br>
       ${thumbs}
       <button onclick="openDetail('${s.id}')">Detail</button>
     `;
 
     list.appendChild(div);
   });
-
 });
 
 window.openDetail=id=>{
-
   let s=spots.find(x=>x.id===id);
 
   let imgs="";
   (s.images||[]).forEach(i=>{
-    imgs+=`<img src="${i}" onclick="window.open('${i}')">`;
+    imgs+=`<img src="${i}" onclick="openImage('${i}')">`;
   });
 
   let comments="";
@@ -285,19 +282,16 @@ window.openDetail=id=>{
   <div class="modal-content">
 
     <h2>${s.name}</h2>
-    <div>${s.type}</div>
-    <div>📏 ${s.length||"-"} m</div>
-    <div>⚡ ${s.difficulty||"-"}</div>
 
     <div class="section">
       <div class="section-title">📷 Fotky</div>
-      <div class="gallery">${imgs||"Žádné fotky"}</div>
+      <div class="gallery">${imgs}</div>
     </div>
 
     <div class="section">
       <div class="section-title">💬 Komentáře</div>
       ${comments}
-      <input id="cinput" placeholder="Napiš komentář">
+      <input id="cinput">
       <button onclick="addComment('${s.id}')">Přidat</button>
     </div>
 
@@ -309,20 +303,27 @@ window.openDetail=id=>{
   document.body.appendChild(modal);
 };
 
+// 🔥 OPEN IMAGE
+window.openImage=src=>{
+  document.getElementById("imageViewer").style.display="flex";
+  document.getElementById("fullImg").src=src;
+};
+
+window.closeImage=()=>{
+  document.getElementById("imageViewer").style.display="none";
+};
+
 window.addComment=async id=>{
-
-  let text=document.getElementById("cinput").value;
-  if(!text) return;
-
   let s=spots.find(x=>x.id===id);
+  let text=document.getElementById("cinput").value;
+
+  if(!text) return;
 
   await updateDoc(doc(db,"spots",id),{
     comments:[...(s.comments||[]),{text}]
   });
-
 };
 
 </script>
-
 </body>
 </html>
