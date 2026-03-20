@@ -122,8 +122,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
 let userPos = null;
 
-// 🔥 FUNKCE PRO AKTUALIZACI
-function updateUserPosition(pos){
+// 🔥 GPS (bez reloadu!)
+navigator.geolocation.watchPosition(pos=>{
 
   userPos = {
     lat: pos.coords.latitude,
@@ -139,20 +139,7 @@ function updateUserPosition(pos){
     radius:8
   }).addTo(map);
 
-  map.setView([userPos.lat, userPos.lng], 13);
-
-  list.innerHTML = "";
-  spots = [];
-  loadSpots();
-}
-
-// 🔥 1. RYCHLÉ NAČTENÍ
-navigator.geolocation.getCurrentPosition(updateUserPosition, err=>{
-  console.log("GPS chyba:", err);
-});
-
-// 🔥 2. PRŮBĚŽNÁ AKTUALIZACE
-navigator.geolocation.watchPosition(updateUserPosition, err=>{
+}, err=>{
   console.log("GPS chyba:", err);
 },{
   enableHighAccuracy:true
@@ -224,16 +211,15 @@ async function loadSpots(){
     let s=d.data();
     s.id=d.id;
 
+    // vzdálenost spočítáme jen pokud máme GPS
     if(userPos){
       s.distance = getDistance(userPos,s);
     } else {
-      s.distance = 999;
+      s.distance = 0;
     }
 
     spots.push(s);
   });
-
-  spots.sort((a,b)=>a.distance-b.distance);
 
   spots.forEach(s=>{
 
